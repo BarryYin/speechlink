@@ -40,7 +40,6 @@ class ParaformerRealtime {
                             sample_rate: 16000,
                             // vocabulary_id: "vocab-xxx-24ee19fa8cfb4d52902170a0xxxxxxxx",
                             disfluency_removal_enabled: false,
-                            semantic_punctuation_enabled: false,
                             language_hints: ["zh"]
                         },
                         input: {}
@@ -69,7 +68,7 @@ class ParaformerRealtime {
                     }
                 } else if (message.header.event == 'result-generated') {
                     console.log('recv result-generated');
-                    if (callback && message.payload.is_sentence_end) {
+                    if (callback) {
                         callback(message.payload);
                     }
                 }
