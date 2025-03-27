@@ -3,9 +3,11 @@
   "name": "speechlink",
   "builds": [
     { "src": "*.html", "use": "@vercel/static" },
-    { "src": "*.js", "use": "@vercel/node" }
+    { "src": "*.js", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "/" }
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/(.+\\.js)", "dest": "/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
