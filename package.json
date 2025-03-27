@@ -1,0 +1,15 @@
+{
+  "name": "speechlink",
+  "version": "1.0.0",
+  "description": "Speech recognition and translation web application",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "dependencies": {
+    "serve": "^14.0.0"
+  }
+}

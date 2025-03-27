@@ -1,0 +1,12 @@
+# 本地开发文件
+run copy.py
+*.log
+*.tmp
+
+# 测试和调试数据
+/test-data/
+.DS_Store
+Thumbs.db
+
+# 开发文档
+README.md

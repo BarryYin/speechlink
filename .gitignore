@@ -1,0 +1,24 @@
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 开发环境和构建文件
+node_modules/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 个人开发文件
+run copy.py
+*.log
+*.tmp
+
+# 调试文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 本地测试数据
+/test-data/

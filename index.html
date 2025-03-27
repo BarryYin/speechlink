@@ -401,10 +401,191 @@
         .chat-container::-webkit-scrollbar-thumb:hover {
             background: rgba(142, 142, 147, 0.6);
         }
+        
+        /* 翻译功能相关的样式 */
+        .translation-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            min-width: 220px;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+        
+        .translation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        
+        .translation-title {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 1rem;
+        }
+        
+        .translation-toggle {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+        }
+        
+        .translation-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--success-color);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+        
+        .language-select {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background-color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 10px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        
+        .language-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+        }
+        
+        .language-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            display: block;
+        }
+        
+        .translation-indicator {
+            display: flex;
+            align-items: center;
+            padding: 5px 10px;
+            background-color: rgba(255, 149, 0, 0.1);
+            border-left: 2px solid var(--accent-color);
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            width: calc(100% - 20px);
+        }
+        
+        .indicator-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        
+        .translated-message {
+            background: linear-gradient(135deg, #E9F5FF, #F2FAFF);
+            border-left: 3px solid var(--teal-color);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .translation-panel {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin-bottom: 20px;
+                width: 90%;
+            }
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div class="translation-panel">
+        <div class="translation-header">
+            <h3 class="translation-title">翻译功能</h3>
+            <label class="translation-toggle">
+                <input type="checkbox" id="translationToggle">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <label class="language-label">源语言</label>
+        <select id="sourceLanguage" class="language-select">
+            <option value="zh">中文</option>
+            <option value="en">英语</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+            <option value="fr">法语</option>
+            <option value="de">德语</option>
+            <option value="es">西班牙语</option>
+            <option value="ru">俄语</option>
+        </select>
+        
+        <label class="language-label">目标语言</label>
+        <select id="targetLanguage" class="language-select">
+            <option value="en">英语</option>
+            <option value="zh">中文</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+            <option value="fr">法语</option>
+            <option value="de">德语</option>
+            <option value="es">西班牙语</option>
+            <option value="ru">俄语</option>
+        </select>
+        
+        <div id="translationStatus" class="translation-indicator" style="display: none;">
+            <span class="indicator-dot"></span>
+            <span>翻译中...</span>
+        </div>
+    </div>
+    
     <div class="container">
         <div class="app-header">
             <h1>语音识别助手</h1>
@@ -439,10 +620,30 @@
         const pauseTimeRange = document.getElementById('pauseTimeRange');
         const pauseTimeValue = document.getElementById('pauseTimeValue');
         
+        // 翻译功能相关元素
+        const translationToggle = document.getElementById('translationToggle');
+        const sourceLanguage = document.getElementById('sourceLanguage');
+        const targetLanguage = document.getElementById('targetLanguage');
+        const translationStatus = document.getElementById('translationStatus');
+        
+        let isTranslationEnabled = false;
+        let pendingTranslations = new Map(); // 存储待处理的翻译请求
+        
+        translationToggle.addEventListener('change', () => {
+            isTranslationEnabled = translationToggle.checked;
+            console.log(`翻译功能已${isTranslationEnabled ? '启用' : '禁用'}`);
+            
+            // 如果禁用翻译，确保隐藏翻译状态指示器
+            if (!isTranslationEnabled) {
+                translationStatus.style.display = 'none';
+            }
+        });
+        
         let processingMessage = null;  // 当前正在处理的消息
         let completedSentences = [];   // 已完成的句子列表
         let lastReceivedText = '';     // 上次收到的完整文本
         let pauseDetectionTimer = null;
+        let paraformer = null;
         
         // 更新UI中的值显示
         sensitivityRange.addEventListener('input', () => {
@@ -557,14 +758,125 @@
         };
 
         let recorder = new PCMAudioRecorder();
-        let paraformer = null;
+        
+        // 使用阿里云百炼平台进行翻译
+        async function translateText(text, sourceLang, targetLang) {
+            if (!text || text.trim() === '') {
+                return text;
+            }
+            
+            try {
+                // 显示翻译指示器
+                translationStatus.style.display = 'flex';
+                
+                // 将UI语言代码映射到百炼平台API需要的语言代码
+                const sourceCode = mapLanguageCode(sourceLang);
+                const targetCode = mapLanguageCode(targetLang);
+                
+                // 检查当前文本是否已经发送了翻译请求
+                const translationKey = `${text}-${sourceCode}-${targetCode}`;
+                
+                if (pendingTranslations.has(translationKey)) {
+                    console.log('该文本已在翻译队列中:', text);
+                    return text; // 如果已经有相同的翻译请求，则返回原文
+                }
+                
+                console.log(`尝试翻译: "${text}" 从 ${sourceCode} 到 ${targetCode}`);
+                
+                return new Promise((resolve) => {
+                    // 创建翻译回调函数
+                    const handleTranslation = (result) => {
+                        // 隐藏翻译指示器
+                        translationStatus.style.display = 'none';
+                        
+                        if (result.isTranslation && result.translatedText) {
+                            console.log(`翻译结果: "${result.translatedText}"`);
+                            
+                            // 更新消息文本
+                            pendingTranslations.delete(translationKey);
+                            resolve(result.translatedText);
+                        } else {
+                            pendingTranslations.delete(translationKey);
+                            resolve(text); // 如果翻译失败，则返回原文
+                        }
+                    };
+                    
+                    // 添加到待处理翻译映射
+                    pendingTranslations.set(translationKey, true);
+                    
+                    // 发送翻译请求
+                    paraformer.translate(text, sourceCode, targetCode, handleTranslation)
+                        .catch(error => {
+                            console.error('翻译请求发送失败:', error);
+                            translationStatus.style.display = 'none';
+                            pendingTranslations.delete(translationKey);
+                            resolve(text);
+                        });
+                    
+                    // 设置超时处理
+                    setTimeout(() => {
+                        if (pendingTranslations.has(translationKey)) {
+                            console.warn('翻译请求超时');
+                            translationStatus.style.display = 'none';
+                            pendingTranslations.delete(translationKey);
+                            resolve(text);
+                        }
+                    }, 5000);
+                });
+            } catch (error) {
+                console.error('翻译处理错误:', error);
+                // 确保翻译状态指示器关闭
+                translationStatus.style.display = 'none';
+                
+                // 返回原文
+                return text;
+            }
+        }
+        
+        // 将UI语言代码转换为百炼平台API所需的语言代码
+        function mapLanguageCode(uiCode) {
+            // 参考run copy.py中的语言代码
+            const languageMap = {
+                'zh': 'zh',
+                'en': 'en',
+                'ja': 'ja',
+                'ko': 'ko',
+                'fr': 'fr',
+                'de': 'de',
+                'es': 'es',
+                'ru': 'ru'
+            };
+            
+            return languageMap[uiCode] || uiCode;
+        }
 
         // 更新正在处理的消息
-        function updateProcessingMessage(result) {
+        async function updateProcessingMessage(result) {
             // 如果没有处理结果，直接返回
             if (!result) return;
             
-            const text = result.text;
+            let text = result.text;
+            let originalText = text; // 保存原始文本用于后续比较
+            
+            // 如果启用了翻译，翻译文本
+            if (isTranslationEnabled && text && text.trim().length > 0) {
+                try {
+                    const src = sourceLanguage.value;
+                    const target = targetLanguage.value;
+                    
+                    // 避免相同语言的翻译
+                    if (src !== target) {
+                        const translatedText = await translateText(text, src, target);
+                        if (translatedText && translatedText !== text) {
+                            text = translatedText;
+                        }
+                    }
+                } catch (error) {
+                    console.error('翻译处理错误:', error);
+                    // 确保翻译状态指示器关闭
+                    translationStatus.style.display = 'none';
+                }
+            }
             
             // 如果是新句子，或者当前没有处理中的消息
             if (result.isNew || !processingMessage) {
@@ -576,6 +888,12 @@
                 // 创建新的处理消息
                 processingMessage = document.createElement('div');
                 processingMessage.className = 'message response-message processing-message';
+                
+                // 如果启用了翻译，添加翻译样式
+                if (isTranslationEnabled && text !== originalText) {
+                    processingMessage.classList.add('translated-message');
+                }
+                
                 processingMessage.textContent = text;
                 chat.appendChild(processingMessage);
             } else {
@@ -585,6 +903,12 @@
                     finalizeCurrentSentence();
                     processingMessage = document.createElement('div');
                     processingMessage.className = 'message response-message processing-message';
+                    
+                    // 如果启用了翻译，添加翻译样式
+                    if (isTranslationEnabled && text !== originalText) {
+                        processingMessage.classList.add('translated-message');
+                    }
+                    
                     processingMessage.textContent = text;
                     chat.appendChild(processingMessage);
                 } else {
@@ -613,6 +937,11 @@
                     // 创建一个合并后的段落
                     const mergedParagraph = document.createElement('div');
                     mergedParagraph.className = 'message response-message completed-message';
+                    
+                    // 如果是翻译后的消息，保留翻译样式
+                    if (messagesToMerge[0].classList.contains('translated-message')) {
+                        mergedParagraph.classList.add('translated-message');
+                    }
                     
                     // 合并文本内容
                     const mergedText = messagesToMerge.map(msg => msg.textContent).join(' ');
@@ -686,6 +1015,7 @@
                 processingMessage = null;
                 completedSentences = [];
                 lastReceivedText = '';
+                pendingTranslations.clear();
                 
                 // 设置灵敏度
                 textProcessor.setSensitivity(parseInt(sensitivityRange.value));
@@ -699,15 +1029,26 @@
                 paraformer = new ParaformerRealtime('wss://dashscope.aliyuncs.com/api-ws/v1/inference/?api_key='+apikey);
 
                 await paraformer.connect((payload) => {
-                    let text = payload.output.sentence.text;
-                    if (text && text.trim()) {
-                        // 使用文本处理器处理新文本
-                        const processedResult = textProcessor.processRecognitionResult(text);
-                        
-                        if (processedResult) {
-                            // 更新显示，始终显示完整句子
-                            updateProcessingMessage(processedResult);
-                            lastReceivedText = text;
+                    console.log('收到回调:', payload);
+                    
+                    // 如果是翻译结果，立即返回，由translate函数处理
+                    if (payload.isTranslation) {
+                        console.log('收到翻译结果，请在翻译回调函数中处理');
+                        return;
+                    }
+                    
+                    // 处理语音识别结果
+                    if (payload.output && payload.output.sentence && payload.output.sentence.text) {
+                        let text = payload.output.sentence.text;
+                        if (text && text.trim()) {
+                            // 使用文本处理器处理新文本
+                            const processedResult = textProcessor.processRecognitionResult(text);
+                            
+                            if (processedResult) {
+                                // 更新显示，始终显示完整句子
+                                updateProcessingMessage(processedResult);
+                                lastReceivedText = text;
+                            }
                         }
                     }
                 });
@@ -719,6 +1060,11 @@
 
                 startButton.disabled = true;
                 stopButton.disabled = false;
+                
+                // 添加欢迎消息说明翻译功能
+                if (isTranslationEnabled) {
+                    addMessage('已启用实时翻译功能。识别到的语音将自动翻译。', 'response-message translated-message');
+                }
 
             } catch (error) {
                 console.error('Error:', error);
@@ -728,10 +1074,18 @@
         stopButton.onclick = async () => {
             console.log('stop button is clicked');
             recorder.stop();
-            await paraformer.stop();
+            
+            try {
+                await paraformer.stop();
+            } catch (error) {
+                console.error('停止Paraformer失败:', error);
+            }
             
             // 结束当前句子
             finalizeCurrentSentence();
+            
+            // 确保翻译状态指示器关闭
+            translationStatus.style.display = 'none';
             
             console.log('paraformer stopped');
             startButton.disabled = false;

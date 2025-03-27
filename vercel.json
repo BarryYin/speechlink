@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "name": "speechlink",
+  "builds": [
+    { "src": "*.html", "use": "@vercel/static" },
+    { "src": "*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/" }
+  ]
+}
