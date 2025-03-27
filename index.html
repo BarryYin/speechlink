@@ -86,12 +86,59 @@
         #audioPlayer {
             display: none;
         }
+        .buttons {
+            margin-top: 1rem;
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+        .control-group {
+            margin-top: 1rem;
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+        }
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .control-item label {
+            margin-bottom: 0.25rem;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .processing-message {
+            font-style: italic;
+            color: #777;
+            border-left: 3px solid #007bff;
+            padding-left: 10px;
+        }
+        .completed-message {
+            color: #000;
+            font-weight: normal;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>ASR</h1>
         <div id="chat" class="chat-container"></div>
+        <div class="control-group">
+            <div class="control-item">
+                <label for="sensitivityRange">灵敏度: <span id="sensitivityValue">5</span></label>
+                <input type="range" id="sensitivityRange" min="1" max="10" value="5">
+            </div>
+            <div class="control-item">
+                <label for="pauseTimeRange">停顿时间(ms): <span id="pauseTimeValue">800</span></label>
+                <input type="range" id="pauseTimeRange" min="300" max="2000" step="100" value="800">
+            </div>
+        </div>
         <div class="buttons">
             <input type="text" id="apikeyInput" placeholder="your apikey">
             <button id="startButton">开始录音</button>
@@ -106,15 +153,232 @@
         const stopButton = document.getElementById('stopButton');
         const textInput = document.getElementById('apikeyInput');
         const chat = document.getElementById('chat');
-        let activeResponseMessage = addMessage('>', 'response-message');
+        const sensitivityRange = document.getElementById('sensitivityRange');
+        const sensitivityValue = document.getElementById('sensitivityValue');
+        const pauseTimeRange = document.getElementById('pauseTimeRange');
+        const pauseTimeValue = document.getElementById('pauseTimeValue');
+        
+        let processingMessage = null;  // 当前正在处理的消息
+        let completedSentences = [];   // 已完成的句子列表
+        let lastReceivedText = '';     // 上次收到的完整文本
+        let pauseDetectionTimer = null;
+        
+        // 更新UI中的值显示
+        sensitivityRange.addEventListener('input', () => {
+            sensitivityValue.textContent = sensitivityRange.value;
+        });
+        
+        pauseTimeRange.addEventListener('input', () => {
+            pauseTimeValue.textContent = pauseTimeRange.value;
+        });
+        
+        // 增强型文本处理器
+        const textProcessor = {
+            sensitivity: 5,            // 灵敏度设置
+            lastCompleteSentence: '',  // 上一个完整句子
+            knownSentences: new Set(), // 用于追踪已知句子，避免重复
+            
+            setSensitivity: function(value) {
+                this.sensitivity = value;
+                console.log('灵敏度设置为:', value);
+            },
+            
+            // 判断新文本是否为已知句子的扩展
+            isTextExtension: function(previousText, newText) {
+                if (!previousText) return false;
+                // 确保新文本包含旧文本作为前缀
+                return newText.startsWith(previousText);
+            },
+            
+            // 判断是否是全新的句子（基于灵敏度）
+            isNewSentence: function(newText) {
+                // 检查是否和任何已知句子有太大重合
+                for (let sentence of this.knownSentences) {
+                    // 如果句子基本相同，就不是全新的
+                    if (this.textSimilarity(sentence, newText) > (10 - this.sensitivity) / 10) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            
+            // 计算两个文本的相似度 (0-1)
+            textSimilarity: function(text1, text2) {
+                if (!text1 || !text2) return 0;
+                
+                // 简单实现：共同字符数 / 较长字符串长度
+                const shorter = text1.length <= text2.length ? text1 : text2;
+                const longer = text1.length > text2.length ? text1 : text2;
+                
+                let commonChars = 0;
+                for (let i = 0; i < shorter.length; i++) {
+                    if (longer.includes(shorter[i])) commonChars++;
+                }
+                
+                return commonChars / longer.length;
+            },
+            
+            // 处理新收到的语音识别结果
+            processRecognitionResult: function(text) {
+                if (!text || text.trim() === '') return null;
+                
+                // 完全相同的文本直接忽略
+                if (text === this.lastCompleteSentence) {
+                    return null;
+                }
+                
+                // 文本变化非常小时忽略（基于灵敏度）
+                if (this.lastCompleteSentence && 
+                    this.textSimilarity(text, this.lastCompleteSentence) > 0.9) {
+                    return null;
+                }
+                
+                // 检查是否是当前句子的扩展
+                if (this.isTextExtension(this.lastCompleteSentence, text)) {
+                    // 这是一个增量更新，返回完整文本
+                    this.lastCompleteSentence = text;
+                    return {
+                        text: text,
+                        isExtension: true
+                    };
+                } else if (this.isNewSentence(text)) {
+                    // 这是一个全新的句子
+                    this.knownSentences.add(this.lastCompleteSentence);
+                    this.lastCompleteSentence = text;
+                    return {
+                        text: text,
+                        isExtension: false,
+                        isNew: true
+                    };
+                } else {
+                    // 这个句子与已知句子有部分重叠但不是扩展
+                    // 基于灵敏度决定是否接受
+                    if (Math.random() < this.sensitivity / 10) {
+                        this.lastCompleteSentence = text;
+                        return {
+                            text: text,
+                            isExtension: false
+                        };
+                    }
+                    return null;
+                }
+            },
+            
+            // 重置处理器状态
+            reset: function() {
+                this.lastCompleteSentence = '';
+                this.knownSentences.clear();
+                console.log('文本处理器已重置');
+            },
+            
+            // 新增配置项
+            maxLineLength: 30,  // 一行最大字符数，超过将换行
+        };
 
         let recorder = new PCMAudioRecorder();
         let paraformer = null;
 
-        // 添加响应消息
-        function addResponseMessage(msg) {
-            activeResponseMessage = addMessage(msg, 'response-message');
+        // 更新正在处理的消息
+        function updateProcessingMessage(result) {
+            // 如果没有处理结果，直接返回
+            if (!result) return;
+            
+            const text = result.text;
+            
+            // 如果是新句子，或者当前没有处理中的消息
+            if (result.isNew || !processingMessage) {
+                // 如果已有处理中的消息，先完成它
+                if (processingMessage) {
+                    finalizeCurrentSentence();
+                }
+                
+                // 创建新的处理消息
+                processingMessage = document.createElement('div');
+                processingMessage.className = 'message response-message processing-message';
+                processingMessage.textContent = text;
+                chat.appendChild(processingMessage);
+            } else {
+                // 是当前句子的扩展，检查长度是否超过限制
+                if (text.length > textProcessor.maxLineLength) {
+                    // 如果超过设定长度，完成当前句子并创建新句子
+                    finalizeCurrentSentence();
+                    processingMessage = document.createElement('div');
+                    processingMessage.className = 'message response-message processing-message';
+                    processingMessage.textContent = text;
+                    chat.appendChild(processingMessage);
+                } else {
+                    // 在同一个消息元素中更新文本
+                    processingMessage.textContent = text;
+                }
+            }
+            
             chat.scrollTop = chat.scrollHeight;
+            
+            // 重置停顿检测
+            resetPauseDetectionTimer();
+        }
+        
+        // 改进: 添加一个段落管理功能
+        function manageParagraphs() {
+            // 获取所有已完成的消息
+            const completedMessages = Array.from(chat.querySelectorAll('.completed-message'));
+            
+            // 如果已有足够多的消息，尝试合并它们
+            if (completedMessages.length >= 3) {
+                // 保持最近的几个句子分开显示
+                const messagesToMerge = completedMessages.slice(0, -2);
+                
+                if (messagesToMerge.length >= 2) {
+                    // 创建一个合并后的段落
+                    const mergedParagraph = document.createElement('div');
+                    mergedParagraph.className = 'message response-message completed-message';
+                    
+                    // 合并文本内容
+                    const mergedText = messagesToMerge.map(msg => msg.textContent).join(' ');
+                    mergedParagraph.textContent = mergedText;
+                    
+                    // 替换原来的消息元素
+                    chat.insertBefore(mergedParagraph, messagesToMerge[0]);
+                    messagesToMerge.forEach(msg => chat.removeChild(msg));
+                }
+            }
+        }
+        
+        // 完成当前正在处理的句子
+        function finalizeCurrentSentence() {
+            if (processingMessage && processingMessage.textContent.trim()) {
+                // 把处理中的消息标记为已完成
+                processingMessage.classList.remove('processing-message');
+                processingMessage.classList.add('completed-message');
+                
+                // 记录已完成的句子，用于去重
+                completedSentences.push(processingMessage.textContent);
+                
+                // 保持列表在合理大小
+                if (completedSentences.length > 20) {
+                    completedSentences = completedSentences.slice(-20);
+                }
+                
+                // 创建新的处理消息元素
+                processingMessage = null;
+                
+                // 管理段落合并
+                manageParagraphs();
+            }
+        }
+        
+        // 重置停顿检测定时器
+        function resetPauseDetectionTimer() {
+            if (pauseDetectionTimer) {
+                clearTimeout(pauseDetectionTimer);
+            }
+            
+            const pauseTime = parseInt(pauseTimeRange.value);
+            pauseDetectionTimer = setTimeout(() => {
+                if (processingMessage && processingMessage.textContent.trim()) {
+                    finalizeCurrentSentence();
+                }
+            }, pauseTime);
         }
 
         // 添加消息到聊天框
@@ -129,23 +393,46 @@
 
         startButton.onclick = async () => {
             try {
+                // 更新文本处理器的行长度设置
+                const sensitivity = parseInt(sensitivityRange.value);
+                // 灵敏度越高，每行字数越少，更容易换行
+                textProcessor.maxLineLength = Math.max(15, 35 - sensitivity * 2);
+                console.log(`设置每行最大字数：${textProcessor.maxLineLength}`);
+                
+                // 重置状态
+                textProcessor.reset();
+                chat.innerHTML = '';
+                processingMessage = null;
+                completedSentences = [];
+                lastReceivedText = '';
+                
+                // 设置灵敏度
+                textProcessor.setSensitivity(parseInt(sensitivityRange.value));
+                
                 let apikey = textInput.value.trim();
                 if (!apikey) {
-                    console.log('no apikey')
                     alert('请输入apikey');
                     return;
                 }
+                
                 paraformer = new ParaformerRealtime('wss://dashscope.aliyuncs.com/api-ws/v1/inference/?api_key='+apikey);
 
                 await paraformer.connect((payload) => {
                     let text = payload.output.sentence.text;
-                    if(text) {
-                        addResponseMessage(text);
+                    if (text && text.trim()) {
+                        // 使用文本处理器处理新文本
+                        const processedResult = textProcessor.processRecognitionResult(text);
+                        
+                        if (processedResult) {
+                            // 更新显示，始终显示完整句子
+                            updateProcessingMessage(processedResult);
+                            lastReceivedText = text;
+                        }
                     }
                 });
+                
                 console.log('paraformer connected');
                 await recorder.connect(async (pcmData) => {
-                    console.log('recording and send audio', pcmData.length);
                     paraformer.sendAudio(pcmData);
                 });
 
@@ -160,9 +447,11 @@
         stopButton.onclick = async () => {
             console.log('stop button is clicked');
             recorder.stop();
-            console.log('recorder stopped');
             await paraformer.stop();
-            // paraformer.close();
+            
+            // 结束当前句子
+            finalizeCurrentSentence();
+            
             console.log('paraformer stopped');
             startButton.disabled = false;
             stopButton.disabled = true;

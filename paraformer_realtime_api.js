@@ -8,6 +8,9 @@ class ParaformerRealtime {
         this.messageQueue = [];
         this.resolveTaskStarted = null;
         this.resolveTaskFinished = null;
+        this.lastFullText = ''; // 存储上一次完整的识别结果文本
+        this.lastUpdateTime = Date.now();
+        this.textTimer = null;
     }
 
     // 连接到 WebSocket 服务并发送 run-task 消息
@@ -68,8 +71,48 @@ class ParaformerRealtime {
                     }
                 } else if (message.header.event == 'result-generated') {
                     console.log('recv result-generated');
-                    if (callback) {
-                        callback(message.payload);
+                    if (callback && message.payload.output.sentence.text) {
+                        // 获取完整的新识别文本
+                        const fullText = message.payload.output.sentence.text;
+                        
+                        // 如果新文本不为空且与上次的不同
+                        if (fullText && fullText !== this.lastFullText) {
+                            // 计算新文本中与上次文本相比新增的部分
+                            let newSegment = '';
+                            
+                            // 从fullText中提取相对于lastFullText的新增部分
+                            if (this.lastFullText && fullText.startsWith(this.lastFullText)) {
+                                // 如果新文本包含旧文本作为前缀，只取新增部分
+                                newSegment = fullText.slice(this.lastFullText.length);
+                            } else {
+                                // 如果是完全不同的文本（比如修正了之前的识别结果），则完整显示
+                                newSegment = fullText;
+                            }
+                            
+                            // 如果提取出了新的文本片段
+                            if (newSegment.trim()) {
+                                // 清除之前的定时器
+                                if (this.textTimer) {
+                                    clearTimeout(this.textTimer);
+                                }
+
+                                // 回调新的文本片段
+                                callback({
+                                    ...message.payload,
+                                    output: {
+                                        ...message.payload.output,
+                                        sentence: {
+                                            ...message.payload.output.sentence,
+                                            text: newSegment
+                                        }
+                                    }
+                                });
+
+                                // 更新为完整的新文本和时间戳
+                                this.lastFullText = fullText;
+                                this.lastUpdateTime = Date.now();
+                            }
+                        }
                     }
                 }
             };
