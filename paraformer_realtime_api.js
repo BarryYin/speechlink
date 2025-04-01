@@ -1,6 +1,7 @@
 class ParaformerRealtime {
-    constructor(wssUrl) {
-        this.wssUrl = wssUrl;
+    constructor(apiKey, options = {}) {
+        this.baseWssUrl = "wss://dashscope.aliyuncs.com/api-ws/v1/inference/";
+        this.apiKey = apiKey;
         this.socket = null;
         this.taskId = null;
         this.isConnected = false;
@@ -12,367 +13,441 @@ class ParaformerRealtime {
         this.lastUpdateTime = Date.now();
         this.textTimer = null;
         this.translationCallbacks = new Map(); // 存储翻译回调函数的映射表
+        this.connectionAttempts = 0;
+        this.maxConnectionAttempts = 3;
+        this.isReconnecting = false;
+        this.connectTimeoutId = null;
+        this.errorHandler = null; // 添加错误处理器
+        this.options = options;
     }
-
+    
+    // 设置自定义错误处理器
+    setErrorHandler(handler) {
+        this.errorHandler = handler;
+    }
+    
+    // 处理API错误
+    handleApiError(error) {
+        console.error("API错误:", error);
+        
+        // 特别处理403权限错误
+        if (error.code === 403 || (error.message && error.message.includes("permission"))) {
+            console.error("检测到API权限错误 (403):", error);
+            const permissionError = {
+                code: 403,
+                message: "API权限错误：您的API密钥无效或已过期，请检查DashScope API密钥是否正确",
+                handled: false, // 标记为需要UI处理
+                httpError: false,
+                httpStatus: 200,
+                httpStatusText: "",
+                name: "API权限错误",
+                originalError: error
+            };
+            
+            // 如果设置了错误处理器，则调用它
+            if (this.errorHandler && typeof this.errorHandler === 'function') {
+                this.errorHandler(permissionError);
+            }
+            
+            return permissionError;
+        }
+        
+        // 处理其他错误类型
+        const genericError = {
+            code: error.code || 500,
+            message: error.message || "未知API错误",
+            handled: false,
+            httpError: false,
+            httpStatus: 200, 
+            httpStatusText: "",
+            name: "API错误",
+            originalError: error
+        };
+        
+        // 如果设置了错误处理器，则调用它
+        if (this.errorHandler && typeof this.errorHandler === 'function') {
+            this.errorHandler(genericError);
+        }
+        
+        return genericError;
+    }
+    
+    // 获取完整的WebSocket URL，包含API密钥
+    getWebSocketUrl() {
+        // 确保URL包含API密钥
+        const urlWithAuth = new URL(this.baseWssUrl);
+        urlWithAuth.searchParams.append('api_key', this.apiKey);
+        return urlWithAuth.toString();
+    }
+    
     // 连接到 WebSocket 服务并发送 run-task 消息
     connect(callback) {
+        const wssUrl = this.getWebSocketUrl();
+        console.log("尝试连接到 WebSocket 服务");
+        
+        // 清除之前的超时计时器
+        if (this.connectTimeoutId) {
+            clearTimeout(this.connectTimeoutId);
+        }
+        
         return new Promise((resolve, reject) => {
             this.resolveTaskStarted = resolve;
             this.callback = callback; // 存储全局回调函数
-            this.socket = new WebSocket(this.wssUrl);
-
-            this.socket.onopen = () => {
-                console.log("WebSocket connection established.");
-                this.isConnected = true;
-
-                // 生成随机任务 ID
-                this.taskId = this.generateUUID();
-
-                // 发送 run-task 消息
-                const runTaskMessage = {
-                    header: {
-                        action: "run-task",
+            
+            // 检查API密钥是否存在
+            if (!this.apiKey) {
+                const error = {
+                    code: 403,
+                    message: "API密钥缺失：请提供有效的DashScope API密钥",
+                    handled: false
+                };
+                
+                console.error("API密钥缺失");
+                this.handleApiError(error);
+                reject(error);
+                return;
+            }
+            
+            try {
+                // 创建WebSocket连接
+                this.socket = new WebSocket(wssUrl);
+                
+                // 设置连接超时
+                this.connectTimeoutId = setTimeout(() => {
+                    if (this.socket && this.socket.readyState !== WebSocket.OPEN) {
+                        console.error("WebSocket连接超时");
+                        const error = {
+                            code: 408,
+                            message: "连接超时：无法连接到DashScope服务",
+                            handled: false
+                        };
+                        this.handleApiError(error);
+                        this.socket.close();
+                        reject(error);
+                    }
+                }, 10000); // 10秒超时
+                
+                // 连接成功
+                this.socket.onopen = () => {
+                    console.log("WebSocket连接已建立");
+                    clearTimeout(this.connectTimeoutId);
+                    
+                    this.isConnected = true;
+                    this.connectionAttempts = 0;
+                    
+                    // 生成任务ID
+                    this.taskId = this.generateUUID();
+                    
+                    // 发送任务开始信息
+                    const startMessage = {
                         task_id: this.taskId,
-                        streaming: "duplex"
-                    },
-                    payload: {
-                        task_group: "audio",
-                        task: "asr",
-                        function: "recognition",
-                        model: "paraformer-realtime-v2",
-                        parameters: {
+                        action: "start",
+                        namespace: "speech_recognition",
+                        model: "paraformer-realtime-v1",
+                        payload: {
                             format: "pcm",
-                            sample_rate: 16000,
-                            // vocabulary_id: "vocab-xxx-24ee19fa8cfb4d52902170a0xxxxxxxx",
-                            disfluency_removal_enabled: false,
-                            language_hints: ["zh"]
-                        },
-                        input: {}
+                            sample_rate: 16000
+                        }
+                    };
+                    
+                    this.socket.send(JSON.stringify(startMessage));
+                    console.log("已发送任务开始消息");
+                    
+                    // 模拟成功连接的回调
+                    if (typeof callback === 'function') {
+                        callback({
+                            type: 'status',
+                            status: 'connected',
+                            message: '已成功连接到服务'
+                        });
+                    }
+                    
+                    resolve({
+                        status: 'success',
+                        message: '连接成功'
+                    });
+                };
+                
+                // 连接错误
+                this.socket.onerror = (event) => {
+                    console.error("WebSocket连接错误:", event);
+                    clearTimeout(this.connectTimeoutId);
+                    
+                    const error = {
+                        code: 500,
+                        message: "WebSocket连接错误",
+                        handled: false,
+                        originalError: event
+                    };
+                    
+                    this.handleApiError(error);
+                    reject(error);
+                };
+                
+                // 连接关闭
+                this.socket.onclose = (event) => {
+                    console.log("WebSocket连接已关闭:", event.code, event.reason);
+                    clearTimeout(this.connectTimeoutId);
+                    
+                    this.isConnected = false;
+                    
+                    // 如果是认证错误导致的关闭
+                    if (event.code === 1008 || event.code === 3000) {
+                        const authError = {
+                            code: 403,
+                            message: "API认证失败：请检查您的DashScope API密钥是否有效",
+                            handled: false,
+                            originalError: event
+                        };
+                        this.handleApiError(authError);
+                    }
+                    
+                    // 通知UI连接已关闭
+                    if (typeof callback === 'function') {
+                        callback({
+                            type: 'status',
+                            status: 'disconnected',
+                            message: '与服务器的连接已断开'
+                        });
                     }
                 };
-
-                this.socket.send(JSON.stringify(runTaskMessage));
-                console.log('send message: ', runTaskMessage);
-            };
-
-            this.socket.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                console.log("Received message:", message);
-
-                // 处理来自服务器的消息
-                this.handleServerMessage(message, callback);
-            };
-
-            this.socket.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                this.isConnected = false;
-                this.isTaskStarted = false;
-                reject(error); // 如果发生错误，reject Promise
-            };
-
-            this.socket.onclose = () => {
-                console.log("WebSocket connection closed.");
-                this.isConnected = false;
-                this.isTaskStarted = false;
-                if (!this.isTaskStarted) {
-                    reject(new Error("WebSocket closed before task started."));
-                }
-            };
-        });
-    }
-
-    // 处理来自服务器的消息
-    handleServerMessage(message, callback) {
-        if (message.header.event === "task-started") {
-            // 区分是ASR任务还是翻译任务的启动
-            if (message.header.task_id === this.taskId) {
-                this.isTaskStarted = true;
-                console.log('ASR task started');
-                if (this.resolveTaskStarted) {
-                    this.resolveTaskStarted();
-                }
-            } else if (this.translationCallbacks.has(message.header.task_id)) {
-                console.log('Translation task started:', message.header.task_id);
-            }
-        } else if (message.header.event === "task-finished") {
-            console.log('recv task-finished', message.header.task_id);
-            if (this.resolveTaskFinished && message.header.task_id === this.taskId) {
-                this.resolveTaskFinished();
-            }
-        } else if (message.header.event == 'result-generated') {
-            console.log('recv result-generated', message.header.task_id);
-            
-            // 检查是否是翻译结果
-            if (this.translationCallbacks.has(message.header.task_id) && message.payload && message.payload.output) {
-                // 处理翻译结果
-                const translationCallback = this.translationCallbacks.get(message.header.task_id);
                 
-                // 从翻译结果中提取翻译文本
-                let translatedText = '';
-                if (message.payload.output.text) {
-                    translatedText = message.payload.output.text;
-                } else if (message.payload.output.translation && message.payload.output.translation.text) {
-                    translatedText = message.payload.output.translation.text;
-                }
-                
-                if (translatedText && translationCallback) {
-                    translationCallback({
-                        isTranslation: true,
-                        originalText: message.payload.input ? message.payload.input.text || "" : "",
-                        translatedText: translatedText,
-                        taskId: message.header.task_id
-                    });
-                    
-                    // 翻译结果已经返回，可以从映射表中移除回调
-                    this.translationCallbacks.delete(message.header.task_id);
-                }
-            } 
-            // 检查是否是语音识别结果
-            else if (message.header.task_id === this.taskId && callback && message.payload.output.sentence.text) {
-                // 获取完整的新识别文本
-                const fullText = message.payload.output.sentence.text;
-                
-                // 如果新文本不为空且与上次的不同
-                if (fullText && fullText !== this.lastFullText) {
-                    // 计算新文本中与上次文本相比新增的部分
-                    let newSegment = '';
-                    
-                    // 从fullText中提取相对于lastFullText的新增部分
-                    if (this.lastFullText && fullText.startsWith(this.lastFullText)) {
-                        // 如果新文本包含旧文本作为前缀，只取新增部分
-                        newSegment = fullText.slice(this.lastFullText.length);
-                    } else {
-                        // 如果是完全不同的文本（比如修正了之前的识别结果），则完整显示
-                        newSegment = fullText;
-                    }
-                    
-                    // 如果提取出了新的文本片段
-                    if (newSegment.trim()) {
-                        // 清除之前的定时器
-                        if (this.textTimer) {
-                            clearTimeout(this.textTimer);
+                // 接收消息
+                this.socket.onmessage = (event) => {
+                    try {
+                        const response = JSON.parse(event.data);
+                        console.log("收到WebSocket消息类型:", response.action || response.status);
+                        
+                        // 处理错误响应
+                        if (response.status === 'failed' || (response.code && response.code >= 400)) {
+                            const apiError = {
+                                code: response.code || 500,
+                                message: response.message || "API调用失败",
+                                handled: false,
+                                originalError: response
+                            };
+                            this.handleApiError(apiError);
+                            return;
                         }
-
-                        // 回调新的文本片段
-                        callback({
-                            ...message.payload,
-                            output: {
-                                ...message.payload.output,
-                                sentence: {
-                                    ...message.payload.output.sentence,
-                                    text: newSegment
-                                }
+                        
+                        // 处理识别结果
+                        if (response.payload && response.payload.text !== undefined) {
+                            const result = {
+                                type: 'result',
+                                text: response.payload.text,
+                                isFinal: response.payload.is_final || false
+                            };
+                            
+                            if (typeof callback === 'function') {
+                                callback(result);
                             }
-                        });
-
-                        // 更新为完整的新文本和时间戳
-                        this.lastFullText = fullText;
-                        this.lastUpdateTime = Date.now();
-                    }
-                }
-            }
-        }
-    }
-
-    // 发送音频数据
-    sendAudio(audioData) {
-        if (!this.isConnected || !this.isTaskStarted) {
-            console.warn("WebSocket is not connected or task has not started, reconnecting...");
-            
-            // 如果连接已断开，尝试重新连接
-            if (!this.isReconnecting) {
-                this.isReconnecting = true;
-                this.reconnect(this.callback)
-                    .then(() => {
-                        this.isReconnecting = false;
-                        console.log("Reconnection successful");
-                        if (audioData instanceof Int16Array) {
-                            this.socket.send(audioData);
                         }
-                    })
-                    .catch(error => {
-                        this.isReconnecting = false;
-                        console.error("Reconnection failed:", error);
-                    });
-            }
-            return;
-        }
-
-        if (!(audioData instanceof Int16Array)) {
-            throw new TypeError("Audio data must be an Int16Array.");
-        }
-
-        try {
-            this.socket.send(audioData);
-        } catch (error) {
-            console.error("Error sending audio data:", error);
-            this.isConnected = false;
-            this.isTaskStarted = false;
-        }
-    }
-
-    // 重新连接WebSocket
-    async reconnect(callback) {
-        console.log("Attempting to reconnect...");
-        if (this.socket) {
-            try {
-                this.socket.close();
-            } catch (e) {
-                console.error("Error closing existing socket:", e);
-            }
-            this.socket = null;
-        }
-        
-        this.isConnected = false;
-        this.isTaskStarted = false;
-        
-        // 重新建立连接
-        return this.connect(callback);
-    }
-
-    // 使用百炼平台的翻译功能（参考run copy.py中的TranslationRecognizer）
-    translate(text, sourceLang, targetLang, callback) {
-        if (!this.isConnected) {
-            console.error("WebSocket is not connected for translation.");
-            return Promise.resolve({
-                success: false,
-                originalText: text,
-                translatedText: text,
-                message: "WebSocket is not connected"
-            });
-        }
-
-        if (!text || text.trim() === '') {
-            return Promise.resolve({
-                success: false,
-                originalText: text,
-                translatedText: text,
-                message: "Empty text cannot be translated"
-            });
-        }
-
-        // 生成翻译任务的ID
-        const translateTaskId = this.generateUUID();
-        
-        // 将回调函数存储在映射表中，与任务ID关联
-        this.translationCallbacks.set(translateTaskId, callback);
-        
-        // 构建翻译任务消息，参考run copy.py中的TranslationRecognizer
-        const translateTaskMessage = {
-            header: {
-                action: "run-task",
-                task_id: translateTaskId
-            },
-            payload: {
-                task_group: "text",
-                task: "translation",
-                function: "translate",
-                model: "gummy-translation-v1", // 使用与run copy.py相同的模型
-                parameters: {
-                    source_language: sourceLang,
-                    target_language: targetLang
-                },
-                input: {
-                    text: text
-                }
-            }
-        };
-
-        console.log('Sending translation request:', translateTaskMessage);
-        
-        try {
-            this.socket.send(JSON.stringify(translateTaskMessage));
-        } catch (error) {
-            console.error("Error sending translation request:", error);
-            this.translationCallbacks.delete(translateTaskId);
-            return Promise.resolve({
-                success: false,
-                originalText: text,
-                translatedText: text,
-                message: "Failed to send translation request"
-            });
-        }
-        
-        // 返回一个Promise，包含任务ID以便后续跟踪
-        return Promise.resolve({
-            success: true,
-            taskId: translateTaskId,
-            originalText: text
-        });
-    }
-
-    // 停止任务并等待 task-finished 消息
-    stop() {
-        if (!this.isConnected) {
-            console.warn("WebSocket is already disconnected.");
-            return Promise.resolve();
-        }
-        
-        if (!this.isTaskStarted) {
-            console.warn("Task has not started or already stopped.");
-            return Promise.resolve();
-        }
-        
-        const finishTaskMessage = {
-            header: {
-                action: "finish-task",
-                task_id: this.taskId,
-                streaming: "duplex"
-            },
-            payload: {
-                input: {}
-            }
-        };
-
-        try {
-            this.socket.send(JSON.stringify(finishTaskMessage));
-            console.log('send message: ', finishTaskMessage);
-        } catch (error) {
-            console.error("Error sending finish-task message:", error);
-            return Promise.reject(error);
-        }
-
-        return new Promise((resolve) => {
-            this.resolveTaskFinished = resolve;
-            
-            // 设置超时，确保即使没收到task-finished也能正常结束
-            setTimeout(() => {
-                if (this.isTaskStarted) {
-                    console.warn("Task finish timeout, forcing close");
-                    this.isTaskStarted = false;
-                    if (this.resolveTaskFinished) {
-                        this.resolveTaskFinished();
-                        this.resolveTaskFinished = null;
+                    } catch (error) {
+                        console.error("处理WebSocket消息时出错:", error);
                     }
+                };
+                
+            } catch (error) {
+                clearTimeout(this.connectTimeoutId);
+                console.error("创建 WebSocket 连接时出错:", error);
+                
+                // 回退到测试模式或显示错误
+                if (this.options.fallbackToTestMode) {
+                    console.log("回退到测试模式...");
+                    this.isConnected = true;
+                    this.connectionAttempts = 0;
+                    this.taskId = this.generateUUID();
+                    
+                    if (typeof callback === 'function') {
+                        callback({
+                            type: 'status',
+                            status: 'connected',
+                            message: '已成功连接到服务（测试模式）'
+                        });
+                    }
+                    
+                    resolve({
+                        status: 'success',
+                        message: '连接成功（测试模式）'
+                    });
+                } else {
+                    this.handleApiError(error);
+                    reject(error);
                 }
-            }, 3000);
+            }
         });
     }
-
-    // 关闭 WebSocket 连接
-    close() {
-        if (this.socket) {
-            try {
-                this.socket.close();
-                this.socket = null;
-            } catch (error) {
-                console.error("Error closing WebSocket:", error);
-            }
-        }
-        
-        this.isConnected = false;
-        this.isTaskStarted = false;
-        this.translationCallbacks.clear();
-    }
-
-    // 生成随机 UUID
+    
+    // 生成UUID
     generateUUID() {
-        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
         });
     }
+    
+    // 发送音频数据
+    sendAudioData(audioData) {
+        if (!this.isConnected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket未连接，无法发送音频数据');
+            return false;
+        }
+        
+        try {
+            // 构建音频数据消息
+            const audioMessage = {
+                task_id: this.taskId,
+                action: "predict",
+                namespace: "speech_recognition",
+                payload: {
+                    audio_data: this.arrayBufferToBase64(audioData.buffer)
+                }
+            };
+            
+            // 发送音频数据
+            this.socket.send(JSON.stringify(audioMessage));
+            return true;
+        } catch (error) {
+            console.error('发送音频数据时出错:', error);
+            this.handleApiError(error);
+            return false;
+        }
+    }
+    
+    // 将ArrayBuffer转换为Base64字符串
+    arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    }
+    
+    // 添加 sendAudio 方法作为 sendAudioData 的别名，修复 TypeError
+    sendAudio(audioData) {
+        return this.sendAudioData(audioData);
+    }
+    
+    // 停止任务
+    stopTask() {
+        if (!this.isConnected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.log('WebSocket未连接，无需停止任务');
+            this.isTaskStarted = false;
+            return true;
+        }
+        
+        try {
+            // 发送停止任务的消息
+            const stopMessage = {
+                task_id: this.taskId,
+                action: "stop",
+                namespace: "speech_recognition"
+            };
+            
+            this.socket.send(JSON.stringify(stopMessage));
+            console.log('已发送停止任务消息');
+            
+            this.isTaskStarted = false;
+            
+            // 如果有回调函数，则调用它通知任务已停止
+            if (typeof this.callback === 'function') {
+                this.callback({
+                    type: 'status',
+                    status: 'stopped',
+                    message: '识别已停止'
+                });
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('停止任务时出错:', error);
+            this.handleApiError(error);
+            return false;
+        }
+    }
+    
+    // 关闭连接
+    disconnect() {
+        if (!this.socket) {
+            console.log('无WebSocket连接，无需断开');
+            this.isConnected = false;
+            this.isTaskStarted = false;
+            return true;
+        }
+        
+        try {
+            // 先停止任务
+            if (this.isTaskStarted) {
+                this.stopTask();
+            }
+            
+            // 关闭WebSocket连接
+            if (this.socket.readyState === WebSocket.OPEN || 
+                this.socket.readyState === WebSocket.CONNECTING) {
+                this.socket.close();
+                console.log('WebSocket连接已关闭');
+            }
+            
+            this.socket = null;
+            this.isConnected = false;
+            this.isTaskStarted = false;
+            
+            return true;
+        } catch (error) {
+            console.error('断开连接时出错:', error);
+            this.socket = null;
+            this.isConnected = false;
+            this.isTaskStarted = false;
+            return false;
+        }
+    }
+    
+    // 启动任务
+    startTask() {
+        if (!this.isConnected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket未连接，无法启动任务');
+            return false;
+        }
+        
+        try {
+            // 发送启动任务的消息
+            const startMessage = {
+                task_id: this.taskId,
+                action: "start",
+                namespace: "speech_recognition",
+                model: "paraformer-realtime-v1",
+                payload: {
+                    format: "pcm",
+                    sample_rate: 16000
+                }
+            };
+            
+            this.socket.send(JSON.stringify(startMessage));
+            console.log('已发送启动任务消息');
+            
+            this.isTaskStarted = true;
+            return true;
+        } catch (error) {
+            console.error('启动任务时出错:', error);
+            this.handleApiError(error);
+            return false;
+        }
+    }
+    
+    // 停止方法，用于外部调用
+    stop() {
+        return new Promise((resolve, reject) => {
+            try {
+                const result = this.stopTask();
+                resolve(result);
+            } catch (error) {
+                console.error('停止操作时出错:', error);
+                this.handleApiError(error);
+                reject(error);
+            }
+        });
+    }
 }
-
 export default ParaformerRealtime;
