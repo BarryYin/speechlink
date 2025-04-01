@@ -25,8 +25,8 @@ def get_language_name(code):
         return '' # 或者 '自动检测到的语言'，但空字符串更适合 prompt
     return language_map.get(code, code)
 
-# 注意：路由改为 /translate，因为 Vercel 会将 /api/translate 映射到此
-@app.route('/translate', methods=['POST'])
+# 修改路由路径，适配 Vercel 部署环境
+@app.route('/api/translate', methods=['POST'])
 def translate_proxy():
     """代理翻译请求到阿里云 Dashscope"""
     try:
@@ -149,5 +149,11 @@ def translate_proxy():
     except Exception as e:
         print(f"General error in /api/translate: {e}")
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
+# 为了同时兼容本地开发环境，也添加一个 /translate 路由
+@app.route('/translate', methods=['POST'])
+def translate_proxy_local():
+    """本地环境路由 - 转发到主要处理函数"""
+    return translate_proxy()
 
 # Vercel 会自动寻找名为 'app' 的 Flask 实例, 不需要 app.run()
