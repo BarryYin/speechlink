@@ -16,8 +16,12 @@ def get_language_name(code):
     """根据语言代码获取语言名称，用于文本生成提示"""
     language_map = {
         'zh': '中文', 'en': '英语', 'ja': '日语', 'ko': '韩语',
-        'fr': '法语', 'de': '德语', 'es': '西班牙语', 'ru': '俄语'
+        'fr': '法语', 'de': '德语', 'es': '西班牙语', 'ru': '俄语',
+        'yue': '粤语', 'it': '意大利语' # 添加新语言
     }
+    # 如果是 auto，返回空字符串或特定提示，避免加入 prompt
+    if code == 'auto':
+        return '' # 或者 '自动检测到的语言'，但空字符串更适合 prompt
     return language_map.get(code, code)
 
 @app.route('/api/translate', methods=['POST'])
@@ -48,12 +52,18 @@ def translate_proxy():
                 "text": text
             },
             "parameters": {
-                "source_language": source_language,
+                # "source_language": source_language, # 由下面逻辑控制
                 "target_language": target_language
             }
         }
+        # 如果源语言不是 'auto'，则添加到参数中
+        if source_language != 'auto':
+            translate_payload['parameters']['source_language'] = source_language
+            print(f"Attempting translation API for: {text} (from {source_language})")
+        else:
+             # 如果是 'auto'，则不设置 source_language 参数，让 API 自动检测
+             print(f"Attempting translation API for: {text} (auto-detect source)")
 
-        print(f"Attempting translation API for: {text}")
         try:
             response = requests.post(DASHSCOPE_TRANSLATE_URL, headers=headers, json=translate_payload, timeout=10)
             response.raise_for_status() # 如果状态码不是 2xx，则抛出异常
@@ -88,7 +98,14 @@ def translate_proxy():
         # --- 尝试文本生成 API (Fallback) ---
         print("Attempting text generation API (fallback)...")
         try:
-            prompt = f"将下面的{get_language_name(source_language)}文本翻译成{get_language_name(target_language)}:\n\"{text}\""
+            # 构建 prompt，如果源语言是 auto，则提示可能不准确，但尽力而为
+            source_lang_name = get_language_name(source_language)
+            target_lang_name = get_language_name(target_language)
+            if source_lang_name:
+                 prompt = f"将下面的{source_lang_name}文本翻译成{target_lang_name}:\n\"{text}\""
+            else: # 源语言是 auto
+                 prompt = f"将下面的文本翻译成{target_lang_name}:\n\"{text}\""
+
             text_gen_payload = {
                 "model": "qwen-turbo",
                 "input": {

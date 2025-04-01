@@ -42,7 +42,7 @@
             border-radius: var(--border-radius);
             text-align: center;
             width: 85%;
-            max-width: 800px;
+            max-width: 800px; /* Adjusted max-width for better layout */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -59,22 +59,41 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
+        /* Container for the two chat areas */
+        .split-chat-area {
+            display: flex;
+            width: 100%;
+            gap: 1rem; /* Space between the two areas */
+            margin-bottom: 1.5rem;
+            height: 350px; /* Fixed height for the split area */
+        }
+
         .chat-container {
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
-            height: 350px;
+            align-items: flex-start; /* Messages align to start */
+            height: 100%; /* Take full height of parent */
             overflow-y: auto;
             border: 1px solid rgba(0, 0, 0, 0.08);
             padding: 1rem;
+            padding-top: 30px; /* Space for the title */
             border-radius: var(--border-radius);
             background-color: rgba(255, 255, 255, 0.7);
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
-            width: 100%;
-            margin-bottom: 1.5rem;
+            flex: 1; /* Each container takes half the width */
+            position: relative; /* For title positioning */
             box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.03);
+        }
+
+        .container-title {
+            position: absolute;
+            top: 5px;
+            left: 1rem;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            font-weight: 500;
         }
         
         .input-container {
@@ -117,35 +136,30 @@
             transform: translateY(-1px);
         }
         
+        /* Message styling - simplified for split view */
         .message {
-            padding: 0.75rem 1.25rem;
-            border-radius: 18px;
-            margin-bottom: 0.75rem;
-            max-width: 70%;
+            padding: 0.5rem 0.75rem; /* Reduced padding */
+            border-radius: 8px; /* Smaller radius */
+            margin-bottom: 0.5rem;
+            max-width: 95%; /* Allow messages to take more width */
             word-wrap: break-word;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             animation: fadeIn 0.3s ease;
             transition: all 0.2s ease;
+            align-self: flex-start; /* All messages align left */
+            background-color: #E5E5EA; /* Default background */
+            color: #000;
+            border: 1px solid rgba(0, 0, 0, 0.05);
         }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(5px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
-        .user-message {
-            align-self: flex-end;
-            background: linear-gradient(135deg, var(--primary-color), #0062CC);
-            color: #fff;
-            box-shadow: 0 2px 5px rgba(0, 122, 255, 0.3);
-        }
-        
-        .response-message {
-            align-self: flex-start;
-            background-color: #E5E5EA;
-            color: #000;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
+
+        /* No need for user-message specific alignment/background */
+        /* .user-message { ... } */
+        /* .response-message { ... } */ /* Merged into .message */
         
         #audioPlayer {
             display: none;
@@ -223,7 +237,8 @@
             box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
         }
         
-        .processing-message {
+        /* Processing message style (applied to original text container) */
+        #original-container .processing-message { /* This class might not be used anymore */
             font-style: italic;
             color: var(--text-secondary);
             border-left: 3px solid var(--primary-color);
@@ -231,10 +246,19 @@
             background: linear-gradient(to right, rgba(90, 200, 250, 0.1), rgba(242, 242, 247, 0.8));
         }
         
-        .completed-message {
+        #original-container .completed-message {
             color: #000;
             font-weight: normal;
             transition: all 0.3s ease;
+            border-left: none; /* Remove processing border */
+            background: #E5E5EA; /* Match default message background */
+        }
+
+        /* Style for messages in the translation container */
+        #translation-container .message {
+             background: linear-gradient(135deg, #E9F5FF, #F2FAFF);
+             border-left: 3px solid var(--teal-color);
+             color: var(--text-secondary);
         }
         
         #apikeyInput {
@@ -359,16 +383,8 @@
             animation: pulse 1.5s infinite ease-in-out;
         }
         
-        .processing-message::after {
-            content: "";
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            margin-left: 5px;
-            animation: pulse 1.5s infinite ease-in-out;
-        }
+        /* No longer needed as processing is shown on the message itself */
+        /* .processing-message::after { ... } */
         
         /* 设置值指示器美化 */
         #sensitivityValue, #pauseTimeValue {
@@ -529,11 +545,12 @@
             animation: pulse 1.5s infinite ease-in-out;
         }
         
-        .translated-message {
-            background: linear-gradient(135deg, #E9F5FF, #F2FAFF);
-            border-left: 3px solid var(--teal-color);
-        }
-        
+        /* No longer needed as translation messages have their own style */
+        /* .translated-message { ... } */
+
+        /* No longer needed as original text is just the message content */
+        /* .message .original-text { ... } */
+
         /* 响应式调整 */
         @media (max-width: 768px) {
             .translation-panel {
@@ -542,6 +559,17 @@
                 right: auto;
                 margin-bottom: 20px;
                 width: 90%;
+            }
+            .split-chat-area {
+                flex-direction: column; /* Stack vertically on smaller screens */
+                height: auto; /* Adjust height */
+            }
+            .split-container {
+                 height: 250px; /* Adjust height for stacked view */
+                 margin-bottom: 1rem;
+            }
+            #translation-container {
+                 margin-bottom: 0;
             }
         }
     </style>
@@ -556,23 +584,27 @@
                 <span class="toggle-slider"></span>
             </label>
         </div>
-        <label class="language-label">源语言</label>
+        <label class="language-label">源语言 (Source)</label>
         <select id="sourceLanguage" class="language-select">
-            <option value="zh">中文</option>
-            <option value="en">英语</option>
-            <option value="ja">日语</option>
-            <option value="ko">韩语</option>
-            <option value="fr">法语</option>
-            <option value="de">德语</option>
-            <option value="es">西班牙语</option>
-            <option value="ru">俄语</option>
+            <option value="auto">自动检测 (Auto Detect)</option>
+            <option value="zh">中文 (Chinese)</option>
+            <option value="en">英语 (English)</option>
+            <option value="yue">粤语 (Cantonese)</option>
+            <option value="ja">日语 (Japanese)</option>
+            <option value="ko">韩语 (Korean)</option>
+            <option value="fr">法语 (French)</option>
+            <option value="de">德语 (German)</option>
+            <option value="es">西班牙语 (Spanish)</option>
+            <option value="ru">俄语 (Russian)</option>
+            <option value="it">意大利语 (Italian)</option>
         </select>
         
-        <label class="language-label">目标语言</label>
+        <label class="language-label">目标语言 (Target)</label>
         <select id="targetLanguage" class="language-select">
-            <option value="en">英语</option>
-            <option value="zh">中文</option>
-            <option value="ja">日语</option>
+            <option value="zh">中文 (Chinese)</option>
+            <option value="en">英语 (English)</option>
+            <!-- 根据需要保留或移除其他目标语言 -->
+            <option value="ja">日语 (Japanese)</option>
             <option value="ko">韩语</option>
             <option value="fr">法语</option>
             <option value="de">德语</option>
@@ -590,7 +622,17 @@
         <div class="app-header">
             <h1>语音识别助手</h1>
         </div>
-        <div id="chat" class="chat-container"></div>
+        <!-- 新的左右分区容器 -->
+        <div class="split-chat-area">
+            <div id="original-container" class="chat-container split-container">
+                 <!-- 识别原文将显示在这里 -->
+                 <div class="container-title">识别结果</div>
+            </div>
+            <div id="translation-container" class="chat-container split-container" style="display: none;">
+                 <!-- 翻译结果将显示在这里 -->
+                 <div class="container-title">翻译结果</div>
+            </div>
+        </div>
         <div class="control-group">
             <div class="control-item">
                 <label for="sensitivityRange">灵敏度<span id="sensitivityValue">5</span></label>
@@ -615,7 +657,9 @@
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const textInput = document.getElementById('apikeyInput');
-        const chat = document.getElementById('chat');
+        // const chat = document.getElementById('chat'); // 旧容器 ID - 已移除
+        const originalContainer = document.getElementById('original-container'); // 新原文容器
+        const translationContainer = document.getElementById('translation-container'); // 新翻译容器
         const sensitivityRange = document.getElementById('sensitivityRange');
         const sensitivityValue = document.getElementById('sensitivityValue');
         const pauseTimeRange = document.getElementById('pauseTimeRange');
@@ -628,23 +672,27 @@
         const translationStatus = document.getElementById('translationStatus');
         
         let isTranslationEnabled = false;
-        // let pendingTranslations = new Map(); // 不再需要，因为翻译逻辑已改变
-        
+        // let pendingTranslations = new Map(); // 不再需要
+
+        // 更新翻译容器的可见性
+        function updateTranslationVisibility() {
+            // 控制整个翻译容器的显示/隐藏
+            if (translationContainer) {
+                translationContainer.style.display = isTranslationEnabled ? 'block' : 'none';
+            }
+             // 控制翻译面板中的状态指示器（现在由 translateText 控制）
+        }
+
         translationToggle.addEventListener('change', () => {
             isTranslationEnabled = translationToggle.checked;
             console.log(`翻译功能已${isTranslationEnabled ? '启用' : '禁用'}`);
-            
-            console.log(`翻译功能已${isTranslationEnabled ? '启用' : '禁用'}`);
-            
-            // 如果禁用翻译，确保隐藏翻译状态指示器
-            if (!isTranslationEnabled) {
-                translationStatus.style.display = 'none';
-            }
+            updateTranslationVisibility(); // 更新现有消息的翻译显示
         });
-        
-        let processingMessage = null;  // 当前正在处理的消息
-        let completedSentences = [];   // 已完成的句子列表
-        let lastReceivedText = '';     // 上次收到的完整文本
+
+        // let processingMessage = null;  // 不再需要，因为原文只在完成时添加
+        let currentOriginalText = ''; // Store the text content of the current sentence being processed
+        let completedSentences = [];   // 已完成的句子列表 (原文)
+        let lastReceivedText = '';     // 上次收到的完整文本 (来自 ASR)
         let pauseDetectionTimer = null;
         let paraformer = null;
         // 不再需要 translationService 实例变量
@@ -758,15 +806,15 @@
             },
             
             // 新增配置项
-            maxLineLength: 30,  // 一行最大字符数，超过将换行
+            maxLineLength: 30,  // 一行最大字符数，超过将换行 (在分区视图中可能不太需要)
         };
 
         let recorder = new PCMAudioRecorder();
         
-        // 使用阿里云百炼平台进行翻译
+        // 调用后端代理进行翻译
         async function translateText(text, sourceLang, targetLang) {
             if (!text || text.trim() === '') {
-                return text;
+                return null; // Return null if no text to translate
             }
             
             try {
@@ -784,7 +832,7 @@
                 if (!apiKey) {
                     console.error("API Key is missing.");
                     translationStatus.style.display = 'none';
-                    return text; // 没有 API Key，无法翻译
+                    return null; // 没有 API Key，无法翻译
                 }
 
                 // 调用后端代理 /api/translate
@@ -808,10 +856,10 @@
                     const result = await response.json();
                     if (result.success && result.translated_text) {
                         console.log(`后端翻译结果 (${result.method}): "${result.translated_text}"`);
-                        return result.translated_text;
+                        return result.translated_text; // Return only the translated text
                     } else {
                         console.error('后端翻译失败:', result.error || 'Unknown error from backend');
-                        return text; // 翻译失败，返回原文
+                        return null; // 翻译失败
                     }
                 } else {
                     console.error('调用后端代理失败:', response.status, response.statusText);
@@ -821,122 +869,84 @@
                     } catch (e) {
                         // ignore if response body is not json
                     }
-                    return text; // 请求失败，返回原文
+                    return null; // 请求失败
                 }
             } catch (error) {
                 console.error('翻译处理错误:', error);
                 // 确保翻译状态指示器关闭
                 translationStatus.style.display = 'none';
-                // 返回原文
-                return text;
+                return null; // 发生错误
             }
         }
 
-        // 将UI语言代码转换为翻译API所需的语言代码 (如果需要)
+        // 将UI语言代码转换为翻译API所需的语言代码 (大部分相同，增加新语言)
         function mapLanguageCode(uiCode) {
-            // 参考run copy.py中的语言代码
             const languageMap = {
+                'auto': 'auto',
                 'zh': 'zh',
                 'en': 'en',
+                'yue': 'yue', // 粤语
                 'ja': 'ja',
                 'ko': 'ko',
                 'fr': 'fr',
                 'de': 'de',
                 'es': 'es',
-                'ru': 'ru'
+                'ru': 'ru',
+                'it': 'it'  // 意大利语
             };
-            
-            return languageMap[uiCode] || uiCode;
+            return languageMap[uiCode] || uiCode; // Fallback to uiCode if not found
         }
 
-        // 更新正在处理的消息 (不再处理翻译)
+        // 更新内部存储的当前句子文本，并重置计时器
         function updateProcessingMessage(result) {
-            // 如果没有处理结果，直接返回
             if (!result) return;
-
-            let text = result.text;
-
-            // 如果是新句子，或者当前没有处理中的消息
-            if (result.isNew || !processingMessage) {
-                // 如果已有处理中的消息，先完成它 (不翻译)
-                if (processingMessage) {
-                    finalizeCurrentSentence(false); // 传入 false 表示不触发翻译
-                }
-
-                // 创建新的处理消息
-                processingMessage = document.createElement('div');
-                processingMessage.className = 'message response-message processing-message';
-                processingMessage.textContent = text;
-                chat.appendChild(processingMessage);
-            } else {
-                // 是当前句子的扩展，检查长度是否超过限制
-                if (text.length > textProcessor.maxLineLength) {
-                    // 如果超过设定长度，完成当前句子并创建新句子 (不翻译)
-                    finalizeCurrentSentence(false); // 传入 false 表示不触发翻译
-                    processingMessage = document.createElement('div');
-                    processingMessage.className = 'message response-message processing-message';
-                    processingMessage.textContent = text;
-                    chat.appendChild(processingMessage);
-                } else {
-                    // 在同一个消息元素中更新文本
-                    processingMessage.textContent = text;
-                }
-            }
-
-            chat.scrollTop = chat.scrollHeight;
-
-            // 重置停顿检测
-            resetPauseDetectionTimer();
+            // 只更新内部变量，不直接操作 DOM
+            currentOriginalText = result.text; // Store the latest full text for the current sentence
+            // console.log("Intermediate ASR:", currentOriginalText); // Optional: for debugging
+            resetPauseDetectionTimer(); // Reset pause timer on new text segment
         }
 
-        // 改进: 添加一个段落管理功能
+        // 改进: 添加一个段落管理功能 (暂时注释掉)
+        /*
         function manageParagraphs() {
-            // 获取所有已完成的消息
-            const completedMessages = Array.from(chat.querySelectorAll('.completed-message'));
-            
-            // 如果已有足够多的消息，尝试合并它们
-            if (completedMessages.length >= 3) {
-                // 保持最近的几个句子分开显示
-                const messagesToMerge = completedMessages.slice(0, -2);
-                
-                if (messagesToMerge.length >= 2) {
-                    // 创建一个合并后的段落
-                    const mergedParagraph = document.createElement('div');
-                    mergedParagraph.className = 'message response-message completed-message';
-                    
-                    // 如果是翻译后的消息，保留翻译样式
-                    if (messagesToMerge[0].classList.contains('translated-message')) {
-                        mergedParagraph.classList.add('translated-message');
-                    }
-                    
-                    // 合并文本内容
-                    const mergedText = messagesToMerge.map(msg => msg.textContent).join(' ');
-                    mergedParagraph.textContent = mergedText;
-                    
-                    // 替换原来的消息元素
-                    chat.insertBefore(mergedParagraph, messagesToMerge[0]);
-                    messagesToMerge.forEach(msg => chat.removeChild(msg));
-                }
-            }
+            // ... (Needs rework for split view) ...
         }
+        */
 
-        // 完成当前正在处理的句子 (添加翻译触发逻辑)
-        async function finalizeCurrentSentence(shouldTranslate = true) { // 默认尝试翻译
-            if (processingMessage && processingMessage.textContent.trim()) {
-                let originalText = processingMessage.textContent;
-                let finalText = originalText;
-                let wasTranslated = false;
+        // 完成当前句子：将最终原文添加到 originalContainer，并触发翻译（如果启用）
+        async function finalizeCurrentSentence(shouldTranslate = true) {
+             // 使用内部存储的 currentOriginalText
+             if (currentOriginalText && currentOriginalText.trim() && originalContainer) {
+                let originalTextForDisplay = currentOriginalText; // Get the final text for this sentence
 
-                // 如果启用了翻译且允许翻译此句
-                if (isTranslationEnabled && shouldTranslate) {
+                // 创建并添加最终的原文消息
+                const originalMessage = document.createElement('div');
+                originalMessage.className = 'message response-message completed-message'; // Directly completed
+                originalMessage.textContent = originalTextForDisplay;
+                originalContainer.appendChild(originalMessage);
+                originalContainer.scrollTop = originalContainer.scrollHeight; // Scroll original container
+
+                // 记录已完成的句子（原文）
+                completedSentences.push(originalTextForDisplay);
+                if (completedSentences.length > 20) {
+                    completedSentences = completedSentences.slice(-20);
+                }
+
+                // 尝试翻译并添加到翻译容器
+                if (isTranslationEnabled && shouldTranslate && translationContainer) {
                     try {
                         const src = sourceLanguage.value;
                         const target = targetLanguage.value;
                         if (src !== target) {
-                            const translated = await translateText(originalText, src, target);
-                            if (translated && translated !== originalText) {
-                                finalText = translated;
-                                wasTranslated = true;
+                            // 使用刚确定的最终原文进行翻译
+                            const translatedText = await translateText(originalTextForDisplay, src, target);
+                            if (translatedText) {
+                                // 创建并添加翻译消息
+                                const translatedMessage = document.createElement('div');
+                                translatedMessage.className = 'message response-message completed-message'; // Use same base class
+                                translatedMessage.textContent = translatedText;
+                                translationContainer.appendChild(translatedMessage);
+                                translationContainer.scrollTop = translationContainer.scrollHeight;
                             }
                         }
                     } catch (error) {
@@ -944,72 +954,57 @@
                     }
                 }
 
-                // 更新消息内容和样式
-                processingMessage.textContent = finalText;
-                processingMessage.classList.remove('processing-message');
-                processingMessage.classList.add('completed-message');
-                if (wasTranslated) {
-                    processingMessage.classList.add('translated-message');
-                }
+                // Reset processing state for the original container
+                // processingMessage = null; // No longer needed
+                currentOriginalText = ''; // Clear the text for the next sentence
 
-                // 记录已完成的句子（记录原文，避免重复翻译）
-                completedSentences.push(originalText);
+                // manageParagraphs(); // (暂时禁用)
 
-                // 保持列表在合理大小
-                if (completedSentences.length > 20) {
-                    completedSentences = completedSentences.slice(-20);
-                }
-
-                // 重置处理消息变量
-                processingMessage = null;
-
-                // 管理段落合并
-                manageParagraphs();
-            } else if (processingMessage) {
-                // 如果消息为空，直接移除
-                chat.removeChild(processingMessage);
-                processingMessage = null;
+            } else if (currentOriginalText && !currentOriginalText.trim()) {
+                 // If text was processed but ended up empty, clear it
+                 currentOriginalText = '';
             }
+             // Reset processingMessage reference if it exists (though it shouldn't be used for display now)
+             // processingMessage = null;
         }
+
 
         // 重置停顿检测定时器
         function resetPauseDetectionTimer() {
             if (pauseDetectionTimer) {
                 clearTimeout(pauseDetectionTimer);
             }
-
             const pauseTime = parseInt(pauseTimeRange.value);
             pauseDetectionTimer = setTimeout(() => {
-                // 定时器触发时，完成当前句子（并尝试翻译，如果启用）
-                finalizeCurrentSentence();
+                finalizeCurrentSentence(); // Finalize and potentially translate on pause
             }, pauseTime);
         }
 
-        // 添加消息到聊天框
-        function addMessage(text, className) {
+        // 添加通用消息到指定容器 (主要用于调试或状态信息)
+        function addMessage(text, className, container = originalContainer) {
+            if (!container) return null;
             const message = document.createElement('div');
             message.className = `message ${className}`;
             message.textContent = text;
-            chat.appendChild(message);
-            chat.scrollTop = chat.scrollHeight;
+            container.appendChild(message);
+            container.scrollTop = container.scrollHeight;
             return message;
         }
 
         startButton.onclick = async () => {
             try {
-                // 更新文本处理器的行长度设置
-                const sensitivity = parseInt(sensitivityRange.value);
-                // 灵敏度越高，每行字数越少，更容易换行
-                textProcessor.maxLineLength = Math.max(15, 35 - sensitivity * 2);
-                console.log(`设置每行最大字数：${textProcessor.maxLineLength}`);
+                // 更新文本处理器的行长度设置 (可能不再需要严格限制)
+                // textProcessor.maxLineLength = Math.max(15, 35 - sensitivity * 2);
+                // console.log(`设置每行最大字数：${textProcessor.maxLineLength}`);
                 
                 // 重置状态
                 textProcessor.reset();
-                chat.innerHTML = '';
-                processingMessage = null;
+                if (originalContainer) originalContainer.innerHTML = '<div class="container-title">识别结果</div>'; // 清空原文容器并保留标题
+                if (translationContainer) translationContainer.innerHTML = '<div class="container-title">翻译结果</div>'; // 清空翻译容器并保留标题
+                // processingMessage = null; // No longer needed
+                currentOriginalText = '';
                 completedSentences = [];
                 lastReceivedText = '';
-                // pendingTranslations.clear(); // 不再需要
                 
                 // 设置灵敏度
                 textProcessor.setSensitivity(parseInt(sensitivityRange.value));
@@ -1019,28 +1014,19 @@
                     alert('请输入apikey');
                     return;
                 }
-
-                // 不再需要在这里实例化 TranslationService
-                // translationService = new TranslationService(apikey);
                 
                 paraformer = new ParaformerRealtime('wss://dashscope.aliyuncs.com/api-ws/v1/inference/?api_key='+apikey);
 
                 await paraformer.connect((payload) => {
                     console.log('收到回调:', payload);
-                    // 不再检查 isTranslation，因为 WebSocket 只处理 ASR
-                    // if (payload.isTranslation) { ... }
-
                     // 处理语音识别结果
                     if (payload.output && payload.output.sentence && payload.output.sentence.text) {
                         let text = payload.output.sentence.text;
                         if (text && text.trim()) {
-                            // 使用文本处理器处理新文本
                             const processedResult = textProcessor.processRecognitionResult(text);
-                            
                             if (processedResult) {
-                                // 更新显示，始终显示完整句子
-                                updateProcessingMessage(processedResult);
-                                lastReceivedText = text;
+                                updateProcessingMessage(processedResult); // 更新内部原文文本
+                                lastReceivedText = text; // Store last full text from ASR
                             }
                         }
                     }
@@ -1054,13 +1040,17 @@
                 startButton.disabled = true;
                 stopButton.disabled = false;
                 
-                // 添加欢迎消息说明翻译功能
+                // 添加欢迎消息到原文容器
+                // addMessage('开始录音...', 'response-message', originalContainer);
                 if (isTranslationEnabled) {
-                    addMessage('已启用实时翻译功能。识别到的语音将自动翻译。', 'response-message translated-message');
+                     // Optionally add a note in the translation container
+                     // addMessage('翻译已启用。', 'response-message', translationContainer);
                 }
 
             } catch (error) {
                 console.error('Error:', error);
+                // Maybe add error message to UI
+                addMessage(`启动失败: ${error.message}`, 'response-message danger-message', originalContainer);
             }
         };
 
