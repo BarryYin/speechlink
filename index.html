@@ -835,8 +835,9 @@
                     return null; // 没有 API Key，无法翻译
                 }
 
-                // 调用 Vercel Serverless Function (相对路径)
-                const response = await fetch('/api/translate', { // 指向 Vercel API 路由
+                // 调用 Vercel Serverless Function
+                // 在 Vercel 中，路由为 /translate 而不是 /api/translate
+                const response = await fetch('/translate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
