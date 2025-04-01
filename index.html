@@ -835,8 +835,8 @@
                     return null; // 没有 API Key，无法翻译
                 }
 
-                // 调用后端代理 /api/translate
-                const response = await fetch('http://localhost:5001/api/translate', { // 指向 Flask 后端
+                // 调用 Vercel Serverless Function (相对路径)
+                const response = await fetch('/api/translate', { // 指向 Vercel API 路由
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
