@@ -6,6 +6,11 @@ class PCMAudioRecorder {
         this.audioCallback = null;
     }
 
+    // 添加 startRecording 方法作为 connect 的别名
+    async startRecording(audioCallback) {
+        return this.connect(audioCallback);
+    }
+
     async connect(audioCallback) {
         this.audioCallback = audioCallback;
         if (!this.audioContext) {
@@ -49,6 +54,11 @@ class PCMAudioRecorder {
         this.currentSource.connect(this.processorNode);
         this.processorNode.connect(this.audioContext.destination);
         console.log('Recorder connected.');
+    }
+
+    // 为保持一致性，将 stop 方法重命名为 stopRecording 并保留 stop 作为别名
+    stopRecording() {
+        return this.stop();
     }
 
     stop() {

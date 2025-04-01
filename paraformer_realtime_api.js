@@ -11,9 +11,8 @@ class ParaformerRealtime {
         this.lastFullText = ''; // 存储上一次完整的识别结果文本
         this.lastUpdateTime = Date.now();
         this.textTimer = null;
-        this.translationCallbacks = new Map(); // 存储翻译回调函数的映射表
     }
-
+    
     // 连接到 WebSocket 服务并发送 run-task 消息
     connect(callback) {
         return new Promise((resolve, reject) => {
@@ -84,15 +83,12 @@ class ParaformerRealtime {
     // 处理来自服务器的消息
     handleServerMessage(message, callback) {
         if (message.header.event === "task-started") {
-            // 区分是ASR任务还是翻译任务的启动
             if (message.header.task_id === this.taskId) {
                 this.isTaskStarted = true;
                 console.log('ASR task started');
                 if (this.resolveTaskStarted) {
                     this.resolveTaskStarted();
                 }
-            } else if (this.translationCallbacks.has(message.header.task_id)) {
-                console.log('Translation task started:', message.header.task_id);
             }
         } else if (message.header.event === "task-finished") {
             console.log('recv task-finished', message.header.task_id);
@@ -102,33 +98,8 @@ class ParaformerRealtime {
         } else if (message.header.event == 'result-generated') {
             console.log('recv result-generated', message.header.task_id);
             
-            // 检查是否是翻译结果
-            if (this.translationCallbacks.has(message.header.task_id) && message.payload && message.payload.output) {
-                // 处理翻译结果
-                const translationCallback = this.translationCallbacks.get(message.header.task_id);
-                
-                // 从翻译结果中提取翻译文本
-                let translatedText = '';
-                if (message.payload.output.text) {
-                    translatedText = message.payload.output.text;
-                } else if (message.payload.output.translation && message.payload.output.translation.text) {
-                    translatedText = message.payload.output.translation.text;
-                }
-                
-                if (translatedText && translationCallback) {
-                    translationCallback({
-                        isTranslation: true,
-                        originalText: message.payload.input ? message.payload.input.text || "" : "",
-                        translatedText: translatedText,
-                        taskId: message.header.task_id
-                    });
-                    
-                    // 翻译结果已经返回，可以从映射表中移除回调
-                    this.translationCallbacks.delete(message.header.task_id);
-                }
-            } 
             // 检查是否是语音识别结果
-            else if (message.header.task_id === this.taskId && callback && message.payload.output.sentence.text) {
+            if (message.header.task_id === this.taskId && callback && message.payload.output.sentence.text) {
                 // 获取完整的新识别文本
                 const fullText = message.payload.output.sentence.text;
                 
@@ -152,9 +123,9 @@ class ParaformerRealtime {
                         if (this.textTimer) {
                             clearTimeout(this.textTimer);
                         }
-
-                        // 回调新的文本片段
-                        callback({
+                        
+                        // 创建要发送给回调的响应对象
+                        const responsePayload = {
                             ...message.payload,
                             output: {
                                 ...message.payload.output,
@@ -163,8 +134,11 @@ class ParaformerRealtime {
                                     text: newSegment
                                 }
                             }
-                        });
-
+                        };
+                        
+                        // 回调新的文本片段
+                        callback(responsePayload);
+                        
                         // 更新为完整的新文本和时间戳
                         this.lastFullText = fullText;
                         this.lastUpdateTime = Date.now();
@@ -230,77 +204,6 @@ class ParaformerRealtime {
         return this.connect(callback);
     }
 
-    // 使用百炼平台的翻译功能（参考run copy.py中的TranslationRecognizer）
-    translate(text, sourceLang, targetLang, callback) {
-        if (!this.isConnected) {
-            console.error("WebSocket is not connected for translation.");
-            return Promise.resolve({
-                success: false,
-                originalText: text,
-                translatedText: text,
-                message: "WebSocket is not connected"
-            });
-        }
-
-        if (!text || text.trim() === '') {
-            return Promise.resolve({
-                success: false,
-                originalText: text,
-                translatedText: text,
-                message: "Empty text cannot be translated"
-            });
-        }
-
-        // 生成翻译任务的ID
-        const translateTaskId = this.generateUUID();
-        
-        // 将回调函数存储在映射表中，与任务ID关联
-        this.translationCallbacks.set(translateTaskId, callback);
-        
-        // 构建翻译任务消息，参考run copy.py中的TranslationRecognizer
-        const translateTaskMessage = {
-            header: {
-                action: "run-task",
-                task_id: translateTaskId
-            },
-            payload: {
-                task_group: "text",
-                task: "translation",
-                function: "translate",
-                model: "gummy-translation-v1", // 使用与run copy.py相同的模型
-                parameters: {
-                    source_language: sourceLang,
-                    target_language: targetLang
-                },
-                input: {
-                    text: text
-                }
-            }
-        };
-
-        console.log('Sending translation request:', translateTaskMessage);
-        
-        try {
-            this.socket.send(JSON.stringify(translateTaskMessage));
-        } catch (error) {
-            console.error("Error sending translation request:", error);
-            this.translationCallbacks.delete(translateTaskId);
-            return Promise.resolve({
-                success: false,
-                originalText: text,
-                translatedText: text,
-                message: "Failed to send translation request"
-            });
-        }
-        
-        // 返回一个Promise，包含任务ID以便后续跟踪
-        return Promise.resolve({
-            success: true,
-            taskId: translateTaskId,
-            originalText: text
-        });
-    }
-
     // 停止任务并等待 task-finished 消息
     stop() {
         if (!this.isConnected) {
@@ -362,7 +265,6 @@ class ParaformerRealtime {
         
         this.isConnected = false;
         this.isTaskStarted = false;
-        this.translationCallbacks.clear();
     }
 
     // 生成随机 UUID
